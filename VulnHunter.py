@@ -8,6 +8,7 @@ from bs4 import BeautifulSoup
 from PIL import Image, ImageTk
 import threading
 import csv
+from fpdf import FPDF
 
 class WebVulnScannerApp:
     def __init__(self, root):
@@ -16,7 +17,6 @@ class WebVulnScannerApp:
         self.root.geometry("700x600")
         self.vulns = []
 
-        # === الشعار ===
         try:
             image = Image.open("logo.png").resize((300, 150))
             self.logo = ImageTk.PhotoImage(image)
@@ -25,7 +25,6 @@ class WebVulnScannerApp:
         except Exception as e:
             print(f"Error loading logo: {e}")
 
-        # === إدخال الرابط ===
         self.url_entry = ttk.Entry(root, width=50, font=("Arial", 14))
         self.url_entry.pack(pady=10)
 
@@ -35,7 +34,6 @@ class WebVulnScannerApp:
         self.crawl_button = ttk.Button(root, text="Start Crawl", command=self.start_crawl)
         self.crawl_button.pack(pady=5)
 
-        # === شريط التقدم ===
         self.progress = ttk.Progressbar(root, length=200, mode='indeterminate')
         self.progress.pack(pady=5)
 
@@ -44,6 +42,9 @@ class WebVulnScannerApp:
 
         self.save_button = ttk.Button(root, text="Save Results", command=self.save_results)
         self.save_button.pack(pady=5)
+
+        self.save_pdf_button = ttk.Button(root, text="Save Results as PDF", command=self.save_results_pdf)
+        self.save_pdf_button.pack(pady=5)
 
         self.save_csv_button = ttk.Button(root, text="Save Results as CSV", command=self.save_results_csv)
         self.save_csv_button.pack(pady=5)
@@ -63,15 +64,23 @@ class WebVulnScannerApp:
             url = "http://" + url
         self.result_box.delete("1.0", tk.END)
         self.vulns.clear()
+
         self.vulns.extend(self.check_sql_injection(url))
         self.vulns.extend(self.check_xss(url))
         self.vulns.extend(self.check_http_headers(url))
         self.vulns.extend(self.check_open_redirect(url))
         self.vulns.extend(self.check_ssl(url))
         self.vulns.extend(self.check_csrf(url))
+        self.vulns.extend(self.check_lfi(url))
+
         if self.vulns:
-            result = "\n".join(self.vulns)
-            self.result_box.insert(tk.END, f"Vulnerabilities found:\n{result}")
+            count = len(self.vulns)
+            self.result_box.insert(tk.END, f"{count} Vulnerabilities Found:\n")
+            for vuln in self.vulns:
+                if "vulnerability" in vuln.lower():
+                    self.result_box.insert(tk.END, vuln + "\n", "red")
+                else:
+                    self.result_box.insert(tk.END, vuln + "\n", "green")
         else:
             self.result_box.insert(tk.END, "No vulnerabilities found.")
         self.progress.stop()
@@ -159,6 +168,19 @@ class WebVulnScannerApp:
             print(f"CSRF error: {e}")
         return results
 
+    def check_lfi(self, url):
+        payloads = ["../../etc/passwd", "../../../etc/passwd", "/etc/passwd"]
+        results = []
+        for payload in payloads:
+            test_url = f"{url}/page?file={payload}"
+            try:
+                res = requests.get(test_url)
+                if "root" in res.text.lower():
+                    results.append(f"Possible LFI vulnerability at {test_url}")
+            except Exception as e:
+                print(f"LFI error: {e}")
+        return results
+
     def start_crawl(self):
         url = self.url_entry.get()
         if not url:
@@ -204,7 +226,23 @@ class WebVulnScannerApp:
                 writer = csv.writer(file)
                 writer.writerow(["Vulnerability", "URL"])
                 for vuln in self.vulns:
-                    writer.writerow([vuln, url])  # Replace with the actual URL when saving
+                    writer.writerow([vuln])  # Replace with actual URL if needed
+            messagebox.showinfo("Saved", f"Results saved to {file_path}")
+
+    def save_results_pdf(self):
+        if not self.vulns:
+            messagebox.showinfo("Nothing to save", "No results to save.")
+            return
+        file_path = filedialog.asksaveasfilename(defaultextension=".pdf", filetypes=[("PDF files", "*.pdf")])
+        if file_path:
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+            pdf.cell(200, 10, txt="Vulnerability Scan Results", ln=True, align="C")
+            pdf.ln(10)
+            for vuln in self.vulns:
+                pdf.multi_cell(0, 10, vuln)
+            pdf.output(file_path)
             messagebox.showinfo("Saved", f"Results saved to {file_path}")
 
 if __name__ == "__main__":
