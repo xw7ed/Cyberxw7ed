@@ -1,6 +1,6 @@
 # VulnHunter by xw7ed
 
-**VulnHunter** is a professional GUI tool for web vulnerability scanning, developed using **Python** and **Tkinter**.  
+**VulnHunter** is a GUI tool for web vulnerability scanning, developed using **Python** and **Tkinter**.  
 It allows you to scan for a variety of common web vulnerabilities, crawl websites for links, and save the results in **TXT** or **CSV** format.
 
 ---
